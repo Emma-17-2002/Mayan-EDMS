@@ -1,0 +1,54 @@
+{
+    "date": "2026-11-10 19:05",
+    "api_status": "Connectée",
+    "ocr_status": "Actif",
+    "docker_status": "Opérationnel",
+    "activite_recente": [
+        {
+            "document": "biso_diaspora_lundi_business.pdf",
+            "date": "2026-11-10T09:43:04.672439Z"
+        },
+        {
+            "document": "CA SALES.csv",
+            "date": "2026-03-25T18:37:35.351972Z"
+        },
+        {
+            "document": "Exercice à faire.pdf",
+            "date": "2026-02-24T22:11:11.899836Z"
+        },
+        {
+            "document": "Fiche de contrôle.pdf",
+            "date": "2026-04-12T07:44:12.782191Z"
+        },
+        {
+            "document": "IMG_8990.jpg",
+            "date": "2026-04-29T17:16:05.456831Z"
+        },
+        {
+            "document": "logo-creditducongo-3.jpg",
+            "date": "2026-04-12T12:42:46.413280Z"
+        },
+        {
+            "document": "Rapport_Credit_du_Congo (3).pdf",
+            "date": "2026-06-25T08:19:29.478021Z"
+        }
+    ],
+    "total_documents": 7,
+    "statistiques": {
+        "Fiche d'intervention": 3,
+        "Bon de livraison": 1,
+        "Fiche de contrôle": 1,
+        "Bon de sortie": 1,
+        "Demande d'achat": 1
+    },
+    "documents_expirant_30_jours": [],
+    "documents_expirant_7_jours": [],
+    "workflow": {
+        "brouillon": 7,
+        "attente_budget": 0,
+        "attente_securite": 0,
+        "approuve": 0,
+        "rejete": 0
+    },
+    "conformite": 87
+}

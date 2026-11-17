@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crédit du Congo - Plateforme de Gestion Documentaire</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#EEF3F8; font-family:'Segoe UI',sans-serif; color:#1A2C3E; padding:30px; }
+.dashboard { max-width:1500px; margin:auto; }
+.header { background:white; border-radius:20px; padding:25px; display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; box-shadow:0 4px 12px rgba(0,0,0,.05); }
+.header-left h1 { font-size:28px; color:#0A2A44; }
+.header-left p { color:#64748B; margin-top:5px; }
+.status-bar { display:flex; gap:12px; flex-wrap:wrap; }
+.status { background:#ECFDF5; color:#15803D; padding:10px 18px; border-radius:30px; font-size:13px; font-weight:600; }
+.top-actions { display:flex; gap:10px; margin-bottom:25px; }
+.btn { background:#0A2A44; color:white; border:none; padding:12px 20px; border-radius:10px; cursor:pointer; font-weight:600; }
+.btn:hover { opacity:.9; }
+.kpi-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:20px; margin-bottom:25px; }
+.kpi-card { background:white; border-radius:18px; padding:22px; box-shadow:0 4px 12px rgba(0,0,0,.05); }
+.kpi-title { color:#64748B; font-size:12px; text-transform:uppercase; }
+.kpi-value { font-size:36px; font-weight:bold; color:#0A2A44; margin-top:10px; }
+.kpi-sub { font-size:12px; margin-top:6px; color:#64748B; }
+.graph-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:25px; }
+.card { background:white; border-radius:20px; padding:20px; box-shadow:0 4px 12px rgba(0,0,0,.05); }
+.card h3 { margin-bottom:15px; color:#0A2A44; }
+.workflow { display:flex; gap:15px; flex-wrap:wrap; }
+.workflow-badge { background:#F8FAFC; border:1px solid #CBD5E1; padding:10px 18px; border-radius:30px; font-weight:600; }
+.tables { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-top:25px; }
+table { width:100%; border-collapse:collapse; }
+th { text-align:left; padding:12px; border-bottom:1px solid #E2E8F0; }
+td { padding:12px; border-bottom:1px solid #F1F5F9; }
+.footer { text-align:center; margin-top:30px; color:#94A3B8; font-size:12px; }
+canvas { max-height:320px; }
+</style>
+</head>
+<body>
+<div class="dashboard">
+  <div class="header">
+    <div class="header-left">
+      <h1>🏦 Crédit du Congo</h1>
+      <p>Plateforme de Gestion Documentaire - DSI</p>
+    </div>
+    <div class="status-bar">
+      <div class="status" id="api-status">🟢 API Connectée</div>
+      <div class="status" id="ocr-status">🟢 OCR Actif</div>
+      <div class="status" id="docker-status">🟢 Docker Opérationnel</div>
+    </div>
+  </div>
+
+  <div class="top-actions">
+    <button class="btn" onclick="loadData()">🔄 Synchroniser</button>
+    <button class="btn" onclick="exportPDF()">📄 Export PDF</button>
+  </div>
+
+  <div class="kpi-grid" id="kpi-container"></div>
+
+  <div class="graph-grid">
+    <div class="card">
+      <h3>📊 Répartition documentaire</h3>
+      <canvas id="chart-types"></canvas>
+    </div>
+    <div class="card">
+      <h3>📈 Workflow documentaire</h3>
+      <canvas id="chart-workflow"></canvas>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:25px;">
+    <h3>🕒 Activité récente</h3>
+    <div id="activity-list"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:25px;">
+    <h3>🔄 Workflow</h3>
+    <div class="workflow" id="workflow-badges"></div>
+  </div>
+
+  <div class="tables">
+    <div class="card">
+      <h3>🚨 Documents critiques (≤ 7 jours)</h3>
+      <table>
+        <thead><tr><th>Document</th><th>Date</th></tr></thead>
+        <tbody id="critical-table"></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <h3>⚠️ Documents à surveiller (≤ 30 jours)</h3>
+      <table>
+        <thead><tr><th>Document</th><th>Date</th></tr></thead>
+        <tbody id="warning-table"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="footer">Crédit du Congo - Dashboard Mayan EDMS</div>
+</div>
+
+<script>
+let chartTypes = null;
+let chartWorkflow = null;
+
+async function loadData() {
+  try {
+    const response = await fetch("rapport.json?t=" + Date.now());
+    const data = await response.json();
+
+    document.getElementById("api-status").innerHTML = "🟢 API " + (data.api_status || "Connectée");
+    document.getElementById("ocr-status").innerHTML = "🟢 OCR " + (data.ocr_status || "Actif");
+    document.getElementById("docker-status").innerHTML = "🟢 Docker " + (data.docker_status || "Opérationnel");
+
+    const stats = data.statistiques || {};
+    const workflow = data.workflow || {};
+    const total = data.total_documents || 0;
+    const typesCount = Object.keys(stats).length;
+    const exp30 = data.documents_expirant_30_jours?.length || 0;
+    const exp7 = data.documents_expirant_7_jours?.length || 0;
+
+    document.getElementById("kpi-container").innerHTML = `
+      <div class="kpi-card" style="border-left:5px solid #2563EB;">
+        <div class="kpi-title">Documents</div>
+        <div class="kpi-value">${total}</div>
+        <div class="kpi-sub">Documents enregistrés</div>
+      </div>
+      <div class="kpi-card" style="border-left:5px solid #7C3AED;">
+        <div class="kpi-title">Types</div>
+        <div class="kpi-value">${typesCount}</div>
+        <div class="kpi-sub">Familles documentaires</div>
+      </div>
+      <div class="kpi-card" style="border-left:5px solid #16A34A;">
+        <div class="kpi-title">Conformité</div>
+        <div class="kpi-value">${data.conformite || 87}%</div>
+        <div class="kpi-sub">Taux de conformité</div>
+      </div>
+      <div class="kpi-card" style="border-left:5px solid #F97316;">
+        <div class="kpi-title">J-30</div>
+        <div class="kpi-value">${exp30}</div>
+        <div class="kpi-sub">À surveiller</div>
+      </div>
+      <div class="kpi-card" style="border-left:5px solid #DC2626;">
+        <div class="kpi-title">J-7</div>
+        <div class="kpi-value">${exp7}</div>
+        <div class="kpi-sub">Critique</div>
+      </div>
+    `;
+
+    if (chartTypes) chartTypes.destroy();
+    chartTypes = new Chart(document.getElementById("chart-types"), {
+      type: "doughnut",
+      data: {
+        labels: Object.keys(stats),
+        datasets: [{ data: Object.values(stats), backgroundColor: ['#0A2A44', '#1E4A76', '#2E6A96', '#4E8AB6', '#6EAAD6'] }]
+      },
+      options: { cutout: '65%' }
+    });
+
+    if (chartWorkflow) chartWorkflow.destroy();
+    chartWorkflow = new Chart(document.getElementById("chart-workflow"), {
+      type: "doughnut",
+      data: {
+        labels: ["Brouillon", "Budget", "Sécurité", "Approuvé", "Rejeté"],
+        datasets: [{
+          data: [workflow.brouillon || 0, workflow.attente_budget || 0, workflow.attente_securite || 0, workflow.approuve || 0, workflow.rejete || 0],
+          backgroundColor: ['#0A2A44', '#2E6A96', '#4E8AB6', '#16A34A', '#DC2626']
+        }]
+      },
+      options: { cutout: '65%' }
+    });
+
+    document.getElementById("workflow-badges").innerHTML = `
+      <div class="workflow-badge">📄 Brouillon : ${workflow.brouillon || 0}</div>
+      <div class="workflow-badge">💰 Budget : ${workflow.attente_budget || 0}</div>
+      <div class="workflow-badge">🔒 Sécurité : ${workflow.attente_securite || 0}</div>
+      <div class="workflow-badge">✅ Approuvé : ${workflow.approuve || 0}</div>
+      <div class="workflow-badge">❌ Rejeté : ${workflow.rejete || 0}</div>
+    `;
+
+    const activites = data.activite_recente || [
+      { document: "Bon de livraison ajouté", date: data.date },
+      { document: "Demande d'achat enregistrée", date: data.date },
+      { document: "Contrôle sécurité validé", date: data.date }
+    ];
+
+    document.getElementById("activity-list").innerHTML = activites.map(item => `
+      <div style="padding:12px;border-bottom:1px solid #E2E8F0;">
+        📄 ${item.document}
+        <br><small style="color:#64748B;">${item.date}</small>
+      </div>
+    `).join("");
+
+    let rows7 = "";
+    (data.documents_expirant_7_jours || []).forEach(d => {
+      rows7 += `<tr><td>${d.titre}</td><td>${d.date_expiration}</td></tr>`;
+    });
+    document.getElementById("critical-table").innerHTML = rows7 || "<tr><td colspan='2'>Aucun document critique</td></tr>";
+
+    let rows30 = "";
+    (data.documents_expirant_30_jours || []).forEach(d => {
+      rows30 += `<tr><td>${d.titre}</td><td>${d.date_expiration}</td></tr>`;
+    });
+    document.getElementById("warning-table").innerHTML = rows30 || "<tr><td colspan='2'>Aucune échéance proche</td></tr>";
+
+  } catch (error) {
+    console.error(error);
+    alert("Impossible de lire rapport.json");
+  }
+}
+
+async function exportPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const response = await fetch("rapport.json?t=" + Date.now());
+  const data = await response.json();
+
+  let y = 20;
+  doc.setFontSize(22);
+  doc.text("CRÉDIT DU CONGO", 20, y);
+  y += 10;
+  doc.setFontSize(14);
+  doc.text("Direction des Systèmes d'Information", 20, y);
+  y += 15;
+  doc.text("Rapport de supervision documentaire", 20, y);
+  y += 15;
+  doc.setFontSize(11);
+  doc.text("Date : " + data.date, 20, y);
+  y += 10;
+  doc.text("Documents : " + data.total_documents, 20, y);
+  y += 10;
+  doc.text("Conformité : " + data.conformite + "%", 20, y);
+  y += 20;
+  doc.text("Workflow", 20, y);
+  y += 10;
+  doc.text("Brouillon : " + data.workflow.brouillon, 25, y);
+  y += 8;
+  doc.text("Budget : " + data.workflow.attente_budget, 25, y);
+  y += 8;
+  doc.text("Sécurité : " + data.workflow.attente_securite, 25, y);
+  y += 8;
+  doc.text("Approuvé : " + data.workflow.approuve, 25, y);
+  y += 8;
+  doc.text("Rejeté : " + data.workflow.rejete, 25, y);
+  doc.save("Rapport_Credit_du_Congo.pdf");
+}
+
+loadData();
+setInterval(loadData, 300000);
+</script>
+</body>
+</html>
